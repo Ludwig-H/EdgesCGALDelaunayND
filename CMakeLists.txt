@@ -1,0 +1,50 @@
+cmake_minimum_required(VERSION 3.22)
+project(EdgesCGALDelaunayND LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+# Dependencies
+find_package(CGAL REQUIRED)
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+find_package(OpenMP QUIET)
+find_package(TBB QUIET)
+
+# Decide whether to enable the optional 3D fast-path with TBB
+set(USE_TBB_3D OFF)
+set(TBB_MALLOC_TARGET "")
+if(TBB_FOUND)
+  if(TARGET TBB::tbb)
+    # Need tbbmalloc for scalable allocator symbols pulled by CGAL in parallel mode
+    if(TARGET TBB::tbbmalloc)
+      set(TBB_MALLOC_TARGET TBB::tbbmalloc)
+    else()
+      find_library(TBBMALLOC_LIB tbbmalloc)
+      if(TBBMALLOC_LIB)
+        set(TBB_MALLOC_TARGET ${TBBMALLOC_LIB})
+      endif()
+    endif()
+    if(NOT TBB_MALLOC_TARGET STREQUAL "")
+      set(USE_TBB_3D ON)
+      message(STATUS "TBB found: enabling 3D parallel fast-path")
+    else()
+      message(WARNING "TBB found but tbbmalloc missing -> 3D fast-path disabled")
+    endif()
+  endif()
+endif()
+
+add_executable(EdgesCGALDelaunayND src/EdgesCGALDelaunayND.cpp)
+target_compile_options(EdgesCGALDelaunayND PRIVATE -O3 -DNDEBUG -march=native)
+target_link_libraries(EdgesCGALDelaunayND PRIVATE CGAL::CGAL Eigen3::Eigen)
+if(OpenMP_CXX_FOUND)
+  target_link_libraries(EdgesCGALDelaunayND PRIVATE OpenMP::OpenMP_CXX)
+endif()
+
+if(USE_TBB_3D)
+  target_link_libraries(EdgesCGALDelaunayND PRIVATE TBB::tbb ${TBB_MALLOC_TARGET})
+  target_compile_definitions(EdgesCGALDelaunayND PRIVATE CGAL_LINKED_WITH_TBB)
+endif()
