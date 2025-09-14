@@ -194,7 +194,11 @@ struct EdgeComputerND {
 
     std::vector<typename DT::Full_cell_const_handle> cells;
     cells.reserve(dt.number_of_finite_full_cells());
-    for(auto it=dt.finite_full_cells_begin(); it!=dt.finite_full_cells_end(); ++it) cells.push_back(it);
+    // `finite_full_cells_begin` returns a filter iterator.  Its base iterator is
+    // the compact-container iterator (the actual handle) that we need to store.
+    // Use `.base()` to retrieve it so the vector holds valid cell handles.
+    for(auto it=dt.finite_full_cells_begin(); it!=dt.finite_full_cells_end(); ++it)
+      cells.push_back(it.base());
 
 #ifdef _OPENMP
     int T = omp_get_max_threads();
