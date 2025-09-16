@@ -14,6 +14,10 @@
 #include <CGAL/Triangulation_data_structure.h>
 #include <CGAL/Triangulation_vertex.h>
 #include <CGAL/Triangulation_full_cell.h>
+#include <CGAL/Spatial_sort_traits_adapter_3.h>
+#include <CGAL/Spatial_sort_traits_adapter_d.h>
+#include <CGAL/property_map.h>
+#include <CGAL/spatial_sort.h>
 
 #include <algorithm>
 #include <array>
@@ -148,6 +152,9 @@ struct EdgeComputer3D {
       xmax=std::max(xmax,x); ymax=std::max(ymax,y); zmax=std::max(zmax,z);
       pts.emplace_back(P3(x,y,z), (std::uint64_t)i);
     }
+    CGAL::First_of_pair_property_map<std::pair<P3, std::uint64_t>> first_of_pair;
+    using Traits3 = CGAL::Spatial_sort_traits_adapter_3<K, decltype(first_of_pair)>;
+    CGAL::spatial_sort(pts.begin(), pts.end(), Traits3(first_of_pair));
 #ifdef CGAL_LINKED_WITH_TBB
     std::unique_ptr<typename DT3::Lock_data_structure> lds_holder;
     typename DT3::Lock_data_structure* lds_ptr=nullptr;
@@ -182,10 +189,18 @@ struct EdgeComputerND {
 
   static void run(const std::vector<double>& coords, size_t N, int dim, std::vector<std::pair<std::uint64_t,std::uint64_t>>& edges){
     DT dt(dim, GT());
+    std::vector<std::pair<Point, std::uint64_t>> pts;
+    pts.reserve(N);
     for(size_t i=0;i<N;++i){
       const double* p = coords.data() + i*(size_t)dim;
-      auto vh = dt.insert(Point(p, p+dim));
-      if(vh!=DT::Vertex_handle()) vh->data() = (std::uint64_t)i;
+      pts.emplace_back(Point(p, p+dim), (std::uint64_t)i);
+    }
+    CGAL::First_of_pair_property_map<std::pair<Point, std::uint64_t>> first_of_pair;
+    using Traitsd = CGAL::Spatial_sort_traits_adapter_d<GT, decltype(first_of_pair)>;
+    CGAL::spatial_sort(pts.begin(), pts.end(), Traitsd(first_of_pair));
+    for(const auto& entry : pts){
+      auto vh = dt.insert(entry.first);
+      if(vh!=DT::Vertex_handle()) vh->data() = entry.second;
     }
     int cur = dt.current_dimension();
     if(cur<1){ edges.clear(); return; }
